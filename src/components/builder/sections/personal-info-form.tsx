@@ -13,6 +13,7 @@ import { ImagePlus, X, Upload, FileText } from "lucide-react";
 export function PersonalInfoForm() {
   const personal = useResumeStore((s) => s.data.personal);
   const updatePersonal = useResumeStore((s) => s.updatePersonal);
+  const updateData = useResumeStore((s) => s.updateData);
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -40,31 +41,134 @@ export function PersonalInfoForm() {
   const { toast } = useToast();
 
   const handleImportCV = useCallback(async (file: File) => {
+    const MAX_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      toast({ title: "File too large", description: "Maximum file size is 10MB.", variant: "destructive" });
+      return;
+    }
+
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (ext !== "docx" && ext !== "pdf") {
+      toast({ title: "Unsupported format", description: "Please upload a .docx or .pdf file.", variant: "destructive" });
+      return;
+    }
+
     setImporting(true);
     try {
-      const text = await file.text();
-      const lines = text.split("\n").filter((l) => l.trim()).slice(0, 50);
-      const summary = lines.join("\n").replace(/<[^>]*>/g, "").trim();
-      if (summary.length > 20) {
-        updatePersonal({ summary: summary.slice(0, 2000) });
-        toast({ title: "CV imported", description: "Text extracted. Review and adjust below.", variant: "success" });
-      } else {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const parseRes = await fetch("/api/parse-cv", {
+        method: "POST",
+        body: formData,
+      });
+
+      const resData = await parseRes.json().catch(() => ({ error: "Parse failed" }));
+
+      if (!parseRes.ok) {
+        const msg = resData?.error ?? "We couldn't parse this file";
         toast({
-          title: "We couldn't parse this file",
-          description: "Please paste the text manually using the 'Create from Scratch' tab.",
+          title: parseRes.status === 501 ? msg : "Could not parse file",
+          description: parseRes.status === 501 ? undefined : msg,
           variant: "destructive",
         });
+        return;
       }
-    } catch {
-      toast({
-        title: "We couldn't parse this file",
-        description: "Please paste the text manually using the 'Create from Scratch' tab.",
-        variant: "destructive",
+
+      const { parsed } = resData;
+
+      if (!parsed) {
+        toast({ title: "We couldn't parse this file", description: "Please paste the text manually.", variant: "destructive" });
+        return;
+      }
+
+      const id = () => crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
+
+      updateData({
+        personal: {
+          name:     parsed.name     || personal.name     || "",
+          email:    parsed.email    || personal.email    || "",
+          phone:    parsed.phone    || personal.phone    || "",
+          location: parsed.location || personal.location || "",
+          linkedin: parsed.linkedin || personal.linkedin || "",
+          github:   parsed.github   || personal.github   || "",
+          website:  parsed.website  || personal.website  || "",
+          photo:    personal.photo  ?? null,
+          summary:  parsed.summary  || "",
+        },
+        skills: Array.isArray(parsed.skillGroups) && parsed.skillGroups.length > 0
+          ? parsed.skillGroups.map((g: { category: string; skills: string[] }) => ({
+              id: id(),
+              category: g.category || "Skills",
+              skills: Array.isArray(g.skills) ? g.skills.filter(Boolean) : [],
+            }))
+          : [],
+        experience: Array.isArray(parsed.experience)
+          ? parsed.experience.map((e: Record<string, unknown>) => ({
+              id: id(),
+              company:    String(e.company    ?? ""),
+              position:   String(e.position   ?? ""),
+              location:   String(e.location   ?? ""),
+              startDate:  String(e.startDate  ?? ""),
+              endDate:    String(e.endDate    ?? ""),
+              current:    String(e.endDate ?? "").toLowerCase() === "present" || Boolean(e.current),
+              bullets:    Array.isArray(e.bullets)      ? (e.bullets      as string[]).filter(Boolean) : [],
+              technologies: Array.isArray(e.technologies) ? (e.technologies as string[]).filter(Boolean) : [],
+            }))
+          : [],
+        education: Array.isArray(parsed.education)
+          ? parsed.education.map((e: Record<string, unknown>) => ({
+              id: id(),
+              institution: String(e.institution ?? ""),
+              degree:      String(e.degree      ?? ""),
+              field:       String(e.field       ?? ""),
+              location:    String(e.location    ?? ""),
+              startDate:   String(e.startDate   ?? ""),
+              endDate:     String(e.endDate     ?? ""),
+              gpa:         String(e.gpa         ?? ""),
+              honors:      Array.isArray(e.honors) ? (e.honors as string[]).filter(Boolean) : [],
+            }))
+          : [],
+        certifications: Array.isArray(parsed.certifications)
+          ? parsed.certifications.map((c: Record<string, unknown>) => ({
+              id: id(),
+              name:   String(c.name   ?? ""),
+              issuer: String(c.issuer ?? ""),
+              date:   String(c.date   ?? ""),
+              url:    String(c.url    ?? ""),
+            }))
+          : [],
+        projects: Array.isArray(parsed.projects)
+          ? parsed.projects.map((p: Record<string, unknown>) => ({
+              id: id(),
+              name:         String(p.name        ?? ""),
+              role:         String(p.role        ?? ""),
+              description:  String(p.description ?? ""),
+              technologies: Array.isArray(p.technologies) ? (p.technologies as string[]).filter(Boolean) : [],
+              url:          String(p.url         ?? ""),
+              highlights:   Array.isArray(p.highlights) ? (p.highlights as string[]).filter(Boolean) : [],
+            }))
+          : [],
+        languages: Array.isArray(parsed.languages)
+          ? parsed.languages.map((l: Record<string, unknown>) => ({
+              id: id(),
+              language:    String(l.language    ?? ""),
+              proficiency: String(l.proficiency ?? ""),
+            }))
+          : [],
       });
+
+      toast({
+        title: "CV imported",
+        description: "Fields auto-populated. Review and adjust anything that looks off.",
+        variant: "success",
+      });
+    } catch {
+      toast({ title: "Import failed", description: "Please paste the text manually using the 'Create from Scratch' tab.", variant: "destructive" });
     } finally {
       setImporting(false);
     }
-  }, [updatePersonal, toast]);
+  }, [updatePersonal, updateData, toast, personal]);
 
   return (
     <div className="space-y-6">
