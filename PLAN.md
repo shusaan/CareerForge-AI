@@ -132,6 +132,112 @@ Post-Pro. Implementation order to be defined when Tier 2 reaches steady-state MR
 
 ---
 
+## Tier 1.5 — Marketing redesign + onboarding restructure *(designed; not started)*
+
+> Marketing refresh + 5-step "Start from scratch" wizard + SEO infrastructure.
+
+### Scope
+
+**In**: redesign `/` (landing) only; add `/onboarding` + `/onboarding/wizard`; add `/llms.txt`; wire JSON-LD + OG image + expanded sitemap on `/` (visual) and `/blog/[slug]` + `/r/[id]` (head only).
+**Out of scope**: redesigning `/blog` and `/r/[id]` chrome; AI features in the wizard (deferred to Tier 2); new `/pricing` page (Tier 2); 2-column CV support re-enabled (separate pdf-extractor fix).
+
+### Resolved decisions
+
+- **Stack**: keep shadcn + Tailwind v4.
+- **Wizard steps**: 5 (standard).
+- **Post-wizard**: back to `/builder?welcome=1`.
+- **AI in wizard**: none this round.
+- **SEO scope**: default — auto-metadata + structured data + llms.txt + OG.
+- **Wizard autosave**: write directly to `useResumeStore` via `replaceData`.
+- **Welcome dismissal**: click anywhere · ESC · explicit button.
+- **Skip nav**: at every step, disabled when validation requires the field.
+
+### Landing-page section order
+
+Hero → StatsRibbon → TwoTrackEntryCTA → HowItWorks → FeaturesGrid → PricingTeaser → BuiltForEngineers → SocialProof → Footer (4-col + newsletter signup).
+
+### Onboarding branch (`/onboarding`)
+
+Forks by `?path=import|scratch`. Defaults to the two-card choice (matches landing).
+- **Import path**: drop-zone + existing `parse-cv` flow → `/builder?welcome=1`
+- **Scratch path**: redirect → `/onboarding/wizard`
+
+### Wizard (`/onboarding/wizard`) — 5 steps
+
+1. Personal · 2. Experience · 3. Education · 4. Extras · 5. Review & Export.
+- Server-rendered shell, client `<WizardShell>`.
+- Autosave to `useResumeStore.replaceData()`; `localStorage` resume on refresh.
+- `←` / `→` / `Skip` (disabled when validation requires the field) / `Save & next`.
+- After step 5: `/builder?welcome=1&seed=wizard`.
+
+### Welcome state (`/builder?welcome=1`)
+
+`<WelcomeSheet>` mounts only with the param. Auto-dismisses after 6s; dismisses on click anywhere · ESC · explicit "Got it" button. CSS sparkles only.
+
+### SEO infrastructure
+
+- `src/lib/seo/metadata.ts` — single-source-of-truth title/description, `buildMetadata({ title, description, path, image, type })`, default OG/Twitter.
+- `src/lib/seo/jsonld.ts` — `organizationLd()`, `articleLd(post)`, `personLd(data)`, `softwareApplicationLd()`, `breadcrumbLd(items)`.
+- `/llms.txt` — Markdown listing site structure (per the emerging `llms.txt` standard for AI crawlers).
+- `/opengraph-image.tsx` — Next.js `ImageResponse`. `Cache-Control: public, max-age=86400`.
+- `sitemap.ts` — expand to include `/blog/*` (dynamic from `BLOG_POSTS`).
+
+### Structured data
+
+- `/` → `Organization` + `WebApplication` (`offers.price: "0"`, `availability: "https://schema.org/InStock"`) + `BreadcrumbList`.
+- `/blog/[slug]` → `Article` + `BreadcrumbList` (+ `FAQPage` if FAQ present).
+- `/r/[id]` → `Person` + `BreadcrumbList`.
+
+### Telemetry
+
+Extend `engines/analytics/trackEvent.ts` with typed names:
+`marketing_cta_click | marketing_section_view | onboarding_path_chosen | onboarding_import_started | onboarding_import_succeeded | onboarding_import_failed | wizard_step_viewed | wizard_step_completed | wizard_step_skipped | wizard_finished | wizard_abandoned | welcome_sheet_seen | welcome_sheet_dismissed`.
+
+No external analytics integration this milestone.
+
+### Implementation order (revenue-neutral, but user-experience-critical)
+
+1. Design tokens + primitives (`Container`, `Section`)
+2. Marketing components (Hero, FeaturesGrid, HowItWorks, PricingTeaser, SocialProof, Footer, SectionHeader)
+3. Landing page (`/`) redesign
+4. SEO infrastructure (metadata, jsonld, OG, llms.txt, sitemap)
+5. Structured data on `/`, `/blog/[slug]`, `/r/[id]`
+6. Onboarding branch page
+7. Wizard shell + stepper
+8. 5 wizard steps
+9. Welcome state on `/builder?welcome=1`
+10. Telemetry hook + event names
+
+### Tests
+
+- `tests/unit/marketing/hero.test.tsx` — renders headline + 2 CTAs; CTAs route to `/onboarding?path=import` and `/onboarding/wizard`.
+- `tests/unit/marketing/seo.test.ts` — `/` includes `Organization` + `WebApplication`; `/blog/[slug]` includes `Article` (+ `FAQPage` when FAQ); `/r/[id]` includes `Person`.
+- `tests/unit/onboarding/wizard-stepper.test.tsx` — Forward disabled until validation passes; `Skip` disabled when field required.
+- `tests/unit/onboarding/wizard-flow.test.tsx` — Full 5-step run lands on `/builder?welcome=1&seed=wizard`; reload mid-wizard restores state.
+- `tests/unit/onboarding/welcome-sheet.test.tsx` — Mounts only with `?welcome=1`; auto-dismisses after 6s.
+- `tests/unit/integration-pdf-samples.test.ts` (existing) — Husn fixture still passes.
+
+### Risks & open items (flagged up-front)
+
+| Item | Status |
+|---|---|
+| Stats ribbon uses placeholder numbers | Marked `TODO(real-metrics)` — swap when we have data |
+| Social proof logos | Placeholder boxes (`TODO`) — never fake brand names |
+| Newsletter signup | UI only (`TODO(newsletter-provider)`) |
+| OG image cache | `Cache-Control: public, max-age=86400` |
+| JSON-LD `WebApplication.offers` | Keep `"price": "0"` + `"availability": "https://schema.org/InStock"`; add paid SKU when Tier 2 ships |
+
+### Deferred to later milestones
+
+- Managed AI keys (Tier 2)
+- 2-column CV support re-enabled (separate pdf-extractor fix)
+- Real social-proof logos (when we have them)
+- Real metrics in stats ribbon (when we have data)
+- Newsletter backend (when we pick a provider)
+
+
+---
+
 ## Tier 1 Implementation Roadmap (this milestone)
 
 | # | Item | Visible? |
