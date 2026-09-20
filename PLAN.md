@@ -132,7 +132,7 @@ Post-Pro. Implementation order to be defined when Tier 2 reaches steady-state MR
 
 ---
 
-## Tier 1.5 — Marketing redesign + onboarding restructure *(designed; not started)*
+## Tier 1.5 — Marketing redesign + onboarding restructure ✅ **Shipped** (Tier 2 next)
 
 > Marketing refresh + 5-step "Start from scratch" wizard + SEO infrastructure.
 
